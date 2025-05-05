@@ -59,8 +59,6 @@ func processEvent(event string) {
 		extra = matches[4]
 	}
 
-	//fmt.Println(timeStr, eventIDStr, competitorIDStr, extra)
-
 	eventID, _ := strconv.Atoi(eventIDStr)
 	competitorID, _ := strconv.Atoi(competitorIDStr)
 	eventTime, _ := time.Parse(timeLayout, timeStr)
@@ -77,6 +75,10 @@ func processEvent(event string) {
 
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) registered", competitorID))
 	case 2:
+		if len(extra) == 0 {
+			log.Fatal("5. start time: wrong format of extra field")
+		}
+
 		c.StartTimePlanned, _ = time.Parse(timeLayout, extra)
 
 		logEvent(timeStr, fmt.Sprintf("The start time for the competitor(%d) was set by a draw to %s", competitorID, extra))
@@ -95,12 +97,12 @@ func processEvent(event string) {
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the firing range(%s)", competitorID, extra))
 	case 6:
 		c.Hits++
-		c.Shots++
-
 		target := extra
 
 		logEvent(timeStr, fmt.Sprintf("The target(%s) has been hit by competitor(%d)", target, competitorID))
 	case 7:
+		c.Shots += 5
+
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) left the firing range", competitorID))
 	case 8:
 		c.PenaltyStart = eventTime
@@ -120,6 +122,7 @@ func processEvent(event string) {
 
 		if len(c.LapTimes) == config.Laps {
 			c.Finished = true
+
 			parseEnd, err := time.Parse(timeLayout, timeStr)
 			if err != nil {
 				log.Fatal(fmt.Errorf("error parsing time: %s", err))
@@ -181,10 +184,10 @@ func generateReport() {
 		}
 
 		for i := 0; i < config.Laps-len(r.Competitor.LapTimes); i++ {
-			reportString += "{,} "
+			reportString += "{,}, "
 		}
 
-		reportString = reportString[:len(reportString)-1]
+		reportString = reportString[:len(reportString)-2]
 		reportString += "] "
 
 		speedPenalty := 0.0
@@ -192,10 +195,11 @@ func generateReport() {
 			speedPenalty = float64(config.PenaltyLen) / r.Competitor.PenaltyTime.Seconds()
 		}
 
-		reportString += fmt.Sprintf("{%s, %.3f} %d/5\n",
+		reportString += fmt.Sprintf("{%s, %.3f} %d/%d\n",
 			formatDuration(r.Competitor.PenaltyTime),
 			speedPenalty,
 			r.Competitor.Hits,
+			r.Competitor.Shots,
 		)
 
 		fmt.Print(reportString)
