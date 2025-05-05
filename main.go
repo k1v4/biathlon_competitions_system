@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -76,7 +77,7 @@ func processEvent(event string) {
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) registered", competitorID))
 	case 2:
 		if len(extra) == 0 {
-			log.Fatal("5. start time: wrong format of extra field")
+			log.Fatal("2. start time: wrong format of extra field")
 		}
 
 		c.StartTimePlanned, _ = time.Parse(timeLayout, extra)
@@ -96,6 +97,10 @@ func processEvent(event string) {
 
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the firing range(%s)", competitorID, extra))
 	case 6:
+		if len(extra) == 0 {
+			log.Fatal("6. the target has been hit: wrong format of extra field")
+		}
+
 		c.Hits++
 		target := extra
 
@@ -114,7 +119,14 @@ func processEvent(event string) {
 
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) left the penalty laps", competitorID))
 	case 10:
-		lapDuration := eventTime.Sub(c.CurrentLapStart)
+		var lapDuration time.Duration
+
+		if len(c.LapTimes) == 0 {
+			lapDuration = eventTime.Sub(c.StartTimePlanned)
+		} else {
+			lapDuration = eventTime.Sub(c.CurrentLapStart)
+		}
+
 		c.LapTimes = append(c.LapTimes, lapDuration)
 		c.CurrentLapStart = eventTime
 
@@ -139,6 +151,12 @@ func processEvent(event string) {
 	default:
 		log.Printf("Unhandled event: %d", eventID)
 	}
+}
+
+func truncateFloat(f float64, decimals int) float64 {
+	shift := math.Pow(10, float64(decimals))
+
+	return math.Floor(f*shift) / shift
 }
 
 func generateReport() {
@@ -179,8 +197,9 @@ func generateReport() {
 
 		for _, lap := range r.Competitor.LapTimes {
 			speed := float64(config.LapLen) / lap.Seconds()
+			speedTrunc := truncateFloat(speed, 3)
 
-			reportString += fmt.Sprintf("{%s, %.3f}, ", formatDuration(lap), speed)
+			reportString += fmt.Sprintf("{%s, %.3f}, ", formatDuration(lap), speedTrunc)
 		}
 
 		for i := 0; i < config.Laps-len(r.Competitor.LapTimes); i++ {
@@ -192,7 +211,7 @@ func generateReport() {
 
 		speedPenalty := 0.0
 		if r.Competitor.PenaltyTime > 0 {
-			speedPenalty = float64(config.PenaltyLen) / r.Competitor.PenaltyTime.Seconds()
+			speedPenalty = float64(config.PenaltyLen) * float64(r.Competitor.Shots-r.Competitor.Hits) / r.Competitor.PenaltyTime.Seconds()
 		}
 
 		reportString += fmt.Sprintf("{%s, %.3f} %d/%d\n",
