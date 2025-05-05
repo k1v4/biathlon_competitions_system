@@ -16,6 +16,7 @@ type Competitor struct {
 	Registered       bool
 	StartTimePlanned time.Time
 	ActualStartTime  time.Time
+	FinishTime       time.Time
 	Finished         bool
 	Disqualified     bool
 	NotFinished      bool

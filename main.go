@@ -23,6 +23,7 @@ func formatDuration(d time.Duration) string {
 	sec := int(d.Seconds()) % 60
 	mins := int(d.Minutes()) % 60
 	hour := int(d.Hours())
+
 	return fmt.Sprintf("%02d:%02d:%02d.%03d", hour, mins, sec, ms)
 }
 
@@ -32,8 +33,9 @@ func parseConfig(path string) {
 		log.Fatal(err)
 	}
 	defer file.Close()
+
 	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&config); err != nil {
+	if err = decoder.Decode(&config); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -118,6 +120,12 @@ func processEvent(event string) {
 
 		if len(c.LapTimes) == config.Laps {
 			c.Finished = true
+			parseEnd, err := time.Parse(timeLayout, timeStr)
+			if err != nil {
+				log.Fatal(fmt.Errorf("error parsing time: %s", err))
+			}
+
+			c.FinishTime = parseEnd
 
 			logEvent(eventTime.Format(timeLayout), fmt.Sprintf("The competitor(%d) has finished", competitorID))
 		}
@@ -147,7 +155,7 @@ func generateReport() {
 		} else if c.NotFinished {
 			status = "[NotFinished]"
 		} else {
-			total = c.CurrentLapStart.Sub(c.StartTimePlanned)
+			total = c.FinishTime.Sub(c.StartTimePlanned)
 		}
 
 		results = append(results, Result{CompetitorID: c.ID, TotalTime: total, Competitor: c, Status: status})
@@ -158,27 +166,39 @@ func generateReport() {
 	})
 
 	for _, r := range results {
-		fmt.Printf("%s %d [", r.Status, r.CompetitorID)
+		reportString := ""
+
+		if r.Status == "" {
+			reportString += fmt.Sprintf("%s %d [", formatDuration(r.TotalTime), r.CompetitorID)
+		} else {
+			reportString += fmt.Sprintf("%s %d [", r.Status, r.CompetitorID)
+		}
+
 		for _, lap := range r.Competitor.LapTimes {
 			speed := float64(config.LapLen) / lap.Seconds()
 
-			fmt.Printf("{%s, %.3f}", formatDuration(lap), speed)
+			reportString += fmt.Sprintf("{%s, %.3f}, ", formatDuration(lap), speed)
 		}
 
 		for i := 0; i < config.Laps-len(r.Competitor.LapTimes); i++ {
-			fmt.Print(" {,}")
+			reportString += "{,} "
 		}
 
-		fmt.Print("] ")
+		reportString = reportString[:len(reportString)-1]
+		reportString += "] "
 
 		speedPenalty := 0.0
 		if r.Competitor.PenaltyTime > 0 {
-			speedPenalty = float64(config.PenaltyLen) / (r.Competitor.PenaltyTime.Seconds() / float64(r.Competitor.Hits))
+			speedPenalty = float64(config.PenaltyLen) / r.Competitor.PenaltyTime.Seconds()
 		}
 
-		fmt.Printf("{%s, %.3f} %d/5\n",
-			formatDuration(r.Competitor.PenaltyTime), speedPenalty,
-			r.Competitor.Hits)
+		reportString += fmt.Sprintf("{%s, %.3f} %d/5\n",
+			formatDuration(r.Competitor.PenaltyTime),
+			speedPenalty,
+			r.Competitor.Hits,
+		)
+
+		fmt.Print(reportString)
 	}
 }
 
