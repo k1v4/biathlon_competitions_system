@@ -16,11 +16,11 @@ go run * <config.json> <events.txt>
 
 В репозитории присутствуют файлы, на которых можно запустить систему командами **(для команд требуется находиться в папке с проектом)**:
 ```
-go run . config.json events
+ go run . configs/config.json eventsFolder/events
 ```
 
 ```
-go run . config_test.json events_test.txt
+go run . configs/config_test.json eventsFolder/events_test.txt
 ```
 
 ## Конфигурация (json)
