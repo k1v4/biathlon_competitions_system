@@ -37,7 +37,7 @@ func parseConfig(path string) {
 
 	decoder := json.NewDecoder(file)
 	if err = decoder.Decode(&config); err != nil {
-		log.Fatal(fmt.Errorf("error parsing config file: %s", err))
+		log.Fatalf("error parsing config file: %s", err)
 	}
 }
 
@@ -50,6 +50,8 @@ func processEvent(event string) {
 	matches := re.FindStringSubmatch(event)
 
 	if len(matches) < 4 {
+		log.Fatal("bad format for event")
+
 		return
 	}
 
@@ -62,23 +64,17 @@ func processEvent(event string) {
 
 	eventID, err := strconv.Atoi(eventIDStr)
 	if err != nil {
-		log.Printf("cant parse event id: %s", eventIDStr)
-
-		return
+		log.Fatalf("cant parse event id: %s", eventIDStr)
 	}
 
 	competitorID, err := strconv.Atoi(competitorIDStr)
 	if err != nil {
-		log.Printf("cant parse competitor id: %s", competitorIDStr)
-
-		return
+		log.Fatalf("cant parse competitor id: %s", competitorIDStr)
 	}
 
 	eventTime, err := time.Parse(timeLayout, timeStr)
 	if err != nil {
 		log.Fatalf("cant parse event time: %s", timeStr)
-
-		return
 	}
 
 	c, ok := competitors[competitorID]
@@ -95,43 +91,17 @@ func processEvent(event string) {
 
 	switch eventID {
 	case 1:
-		c.Registered = true
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) registered", competitorID))
+		handleRegistration(c, timeStr)
 	case 2:
 		if len(extra) == 0 {
 			log.Fatal("2. start time: wrong format of extra field")
 		}
 
-		c.StartTimePlanned, _ = time.Parse(timeLayout, extra)
-
-		logEvent(timeStr, fmt.Sprintf("The start time for the competitor(%d) was set by a draw to %s", competitorID, extra))
+		handlePlanningStartTime(c, timeStr, extra)
 	case 3:
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the start line", competitorID))
 	case 4:
-		t, err := time.Parse("15:04:05", config.StartDelta)
-		if err != nil {
-			log.Printf("error parsing start delta time: %s\n", err)
-
-			return
-		}
-
-		parseStartingDelta := time.Duration(t.Hour())*time.Hour +
-			time.Duration(t.Minute())*time.Minute +
-			time.Duration(t.Second())*time.Second
-
-		if eventTime.Compare(c.StartTimePlanned.Add(parseStartingDelta)) == 1 {
-			c.Disqualified = true
-
-			logEvent(timeStr, fmt.Sprintf("The competitor(%d) is disqualified", competitorID))
-
-			return
-		}
-
-		c.ActualStartTime = eventTime
-		c.CurrentLapStart = eventTime
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) has started", competitorID))
+		handleStartTime(c, timeStr, eventTime)
 	case 5:
 		if len(extra) == 0 {
 			log.Fatal("5. firing range: wrong format of extra field")
@@ -213,7 +183,7 @@ func generateReport() {
 			continue
 		}
 
-		if c.ActualStartTime.IsZero() {
+		if c.ActualStartTime.IsZero() || c.Disqualified {
 			status = "[NotStarted]"
 		} else if c.NotFinished {
 			status = "[NotFinished]"
