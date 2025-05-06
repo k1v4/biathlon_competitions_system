@@ -37,7 +37,7 @@ func parseConfig(path string) {
 
 	decoder := json.NewDecoder(file)
 	if err = decoder.Decode(&config); err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Errorf("error parsing config file: %s", err))
 	}
 }
 
@@ -60,14 +60,37 @@ func processEvent(event string) {
 		extra = matches[4]
 	}
 
-	eventID, _ := strconv.Atoi(eventIDStr)
-	competitorID, _ := strconv.Atoi(competitorIDStr)
-	eventTime, _ := time.Parse(timeLayout, timeStr)
+	eventID, err := strconv.Atoi(eventIDStr)
+	if err != nil {
+		log.Printf("cant parse event id: %s", eventIDStr)
+
+		return
+	}
+
+	competitorID, err := strconv.Atoi(competitorIDStr)
+	if err != nil {
+		log.Printf("cant parse competitor id: %s", competitorIDStr)
+
+		return
+	}
+
+	eventTime, err := time.Parse(timeLayout, timeStr)
+	if err != nil {
+		log.Fatalf("cant parse event time: %s", timeStr)
+
+		return
+	}
 
 	c, ok := competitors[competitorID]
 	if !ok {
 		c = &Competitor{ID: competitorID}
 		competitors[competitorID] = c
+	}
+
+	if c.Disqualified {
+		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is disqualified", competitorID))
+
+		return
 	}
 
 	switch eventID {
@@ -86,6 +109,25 @@ func processEvent(event string) {
 	case 3:
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the start line", competitorID))
 	case 4:
+		t, err := time.Parse("15:04:05", config.StartDelta)
+		if err != nil {
+			log.Printf("error parsing start delta time: %s\n", err)
+
+			return
+		}
+
+		parseStartingDelta := time.Duration(t.Hour())*time.Hour +
+			time.Duration(t.Minute())*time.Minute +
+			time.Duration(t.Second())*time.Second
+
+		if eventTime.Compare(c.StartTimePlanned.Add(parseStartingDelta)) == 1 {
+			c.Disqualified = true
+
+			logEvent(timeStr, fmt.Sprintf("The competitor(%d) is disqualified", competitorID))
+
+			return
+		}
+
 		c.ActualStartTime = eventTime
 		c.CurrentLapStart = eventTime
 
