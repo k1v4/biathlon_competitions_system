@@ -42,7 +42,7 @@ func parseConfig(path string) {
 }
 
 func logEvent(timeStr string, text string) {
-	fmt.Printf("[%s] %s\n", timeStr, text)
+	log.Printf("[%s] %s\n", timeStr, text)
 }
 
 func processEvent(event string) {
@@ -55,26 +55,9 @@ func processEvent(event string) {
 		return
 	}
 
-	timeStr, eventIDStr, competitorIDStr := matches[1], matches[2], matches[3]
-
-	extra := ""
-	if len(matches) > 4 {
-		extra = matches[4]
-	}
-
-	eventID, err := strconv.Atoi(eventIDStr)
+	timeStr, eventID, competitorID, eventTime, extra, err := parseParams(matches)
 	if err != nil {
-		log.Fatalf("cant parse event id: %s", eventIDStr)
-	}
-
-	competitorID, err := strconv.Atoi(competitorIDStr)
-	if err != nil {
-		log.Fatalf("cant parse competitor id: %s", competitorIDStr)
-	}
-
-	eventTime, err := time.Parse(timeLayout, timeStr)
-	if err != nil {
-		log.Fatalf("cant parse event time: %s", timeStr)
+		log.Fatalf("failed to parse event: %s", err)
 	}
 
 	c, ok := competitors[competitorID]
@@ -117,6 +100,32 @@ func processEvent(event string) {
 	}
 }
 
+func parseParams(matches []string) (string, int, int, time.Time, string, error) {
+	timeStr, eventIDStr, competitorIDStr := matches[1], matches[2], matches[3]
+
+	extra := ""
+	if len(matches) > 4 {
+		extra = matches[4]
+	}
+
+	eventID, err := strconv.Atoi(eventIDStr)
+	if err != nil {
+		return "", 0, 0, time.Time{}, "", fmt.Errorf("cant parse event id: %s", eventIDStr)
+	}
+
+	competitorID, err := strconv.Atoi(competitorIDStr)
+	if err != nil {
+		return "", 0, 0, time.Time{}, "", fmt.Errorf("cant parse competitor id: %s", competitorIDStr)
+	}
+
+	eventTime, err := time.Parse(timeLayout, timeStr)
+	if err != nil {
+		return "", 0, 0, time.Time{}, "", fmt.Errorf("cant parse event time: %s", timeStr)
+	}
+
+	return timeStr, eventID, competitorID, eventTime, extra, nil
+}
+
 func truncateFloat(f float64, decimals int) float64 {
 	shift := math.Pow(10, float64(decimals))
 
@@ -125,6 +134,7 @@ func truncateFloat(f float64, decimals int) float64 {
 
 func generateReport() {
 	fmt.Println()
+	log.Println("Final report")
 
 	var results []Result
 	for _, c := range competitors {
@@ -185,11 +195,13 @@ func generateReport() {
 			r.Competitor.Shots,
 		)
 
-		fmt.Print(reportString)
+		log.Print(reportString)
 	}
 }
 
 func main() {
+	log.SetFlags(0)
+
 	if len(os.Args) < 3 {
 		log.Fatal("run app by: go run main.go <config.json> <events.txt>")
 	}
