@@ -27,7 +27,6 @@ type Competitor struct {
 	CurrentLapStart  time.Time
 	PenaltyStart     time.Time
 	PenaltyLaps      int
-	ReportRows       []string
 }
 
 type Result struct {
