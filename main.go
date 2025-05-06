@@ -93,73 +93,25 @@ func processEvent(event string) {
 	case 1:
 		handleRegistration(c, timeStr)
 	case 2:
-		if len(extra) == 0 {
-			log.Fatal("2. start time: wrong format of extra field")
-		}
-
 		handlePlanningStartTime(c, timeStr, extra)
 	case 3:
 		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the start line", competitorID))
 	case 4:
 		handleStartTime(c, timeStr, eventTime)
 	case 5:
-		if len(extra) == 0 {
-			log.Fatal("5. firing range: wrong format of extra field")
-		}
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) is on the firing range(%s)", competitorID, extra))
+		handleFiringRange(c, timeStr, extra)
 	case 6:
-		if len(extra) == 0 {
-			log.Fatal("6. the target has been hit: wrong format of extra field")
-		}
-
-		c.Hits++
-		target := extra
-
-		logEvent(timeStr, fmt.Sprintf("The target(%s) has been hit by competitor(%d)", target, competitorID))
+		handleShooting(c, timeStr, extra)
 	case 7:
-		c.Shots += 5
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) left the firing range", competitorID))
+		handleLeftFiringRange(c, timeStr)
 	case 8:
-		c.PenaltyStart = eventTime
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) entered the penalty laps", competitorID))
+		handleEnteringPenalty(c, timeStr, eventTime)
 	case 9:
-		penaltyDuration := eventTime.Sub(c.PenaltyStart)
-		c.PenaltyTime += penaltyDuration
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) left the penalty laps", competitorID))
+		handleLeftPenalty(c, timeStr, eventTime)
 	case 10:
-		var lapDuration time.Duration
-
-		if len(c.LapTimes) == 0 {
-			lapDuration = eventTime.Sub(c.StartTimePlanned)
-		} else {
-			lapDuration = eventTime.Sub(c.CurrentLapStart)
-		}
-
-		c.LapTimes = append(c.LapTimes, lapDuration)
-		c.CurrentLapStart = eventTime
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) ended the main lap", competitorID))
-
-		if len(c.LapTimes) == config.Laps {
-			c.Finished = true
-
-			parseEnd, err := time.Parse(timeLayout, timeStr)
-			if err != nil {
-				log.Fatal(fmt.Errorf("error parsing time: %s", err))
-			}
-
-			c.FinishTime = parseEnd
-
-			logEvent(eventTime.Format(timeLayout), fmt.Sprintf("The competitor(%d) has finished", competitorID))
-		}
+		handleEndMainLap(c, timeStr, eventTime)
 	case 11:
-		c.NotFinished = true
-
-		logEvent(timeStr, fmt.Sprintf("The competitor(%d) can`t continue: %s", competitorID, extra))
+		handleCantContinue(c, timeStr, extra)
 	default:
 		log.Printf("Unhandled event: %d", eventID)
 	}
